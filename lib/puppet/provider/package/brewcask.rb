@@ -152,7 +152,7 @@ Puppet::Type.type(:package).provide(:brewcask, :parent => Puppet::Provider::Pack
     Puppet.debug "Listing installed packages"
     begin
       if resource_name = options[:justme]
-        result = run_brew('list', '--cask', '--versions', resource_name)
+        result = run_brew('list', '--cask', '--versions', resource_name, failonfail: false)
         if result.empty?
           Puppet.debug "Package #{resource_name} not installed"
         else
