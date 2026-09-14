@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 3.1.3 (2026-09-14)
+- fix: brew commands no longer abort with `getcwd: cannot access parent directories` and `USER: unbound variable` — every privileged brew invocation now runs with a cwd the brew owner can read (their home, `/tmp` as fallback) and with `USER`/`LOGNAME` set, which a launchd-started Puppet agent does not provide. Affects every brew-invoking provider: the `brew`, `homebrew`, `brewcask` and `tap` package providers and the `homebrew_tap`, `homebrew_pin`, `homebrew_service` and `homebrew_bundle` types
+
 ## 3.1.2 (2026-07-20)
 - feature: `homebrew_environment` (and `github_token`) now also write `$HOME/.homebrew/brew.env`, the file Homebrew (>= 4.1) natively reads on startup — the mechanism actually honored by `brew` invocations, unlike `/etc/environment` which macOS doesn't read automatically. New optional `user_home` parameter overrides the assumed `/Users/<user>` home directory for non-standard accounts
 - internal: environment-variable-to-line formatting is now computed once and shared between `/etc/environment` and `brew.env` to avoid the two files drifting out of sync

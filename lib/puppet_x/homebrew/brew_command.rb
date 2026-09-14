@@ -64,7 +64,8 @@ module PuppetX
         brew_path = command(:brew)
         owner     = stat('-nf', '%Uu', brew_path).to_i
         group     = stat('-nf', '%Ug', brew_path).to_i
-        home      = Etc.getpwuid(owner).dir
+        passwd    = Etc.getpwuid(owner)
+        home      = passwd.dir
 
         if owner.zero?
           raise Puppet::ExecutionFailure,
@@ -85,8 +86,19 @@ module PuppetX
           :uid                => uid,
           :gid                => gid,
           :combine            => combine,
-          # Reads must not trigger a network `brew update` mid-run.
-          :custom_environment => { 'HOME' => home, 'HOMEBREW_NO_AUTO_UPDATE' => '1' },
+          # brew refuses to start on a cwd it cannot read, and Puppet's own is
+          # often untraversable for the brew owner. Puppet chdirs before
+          # dropping privileges, so this is checked as the target user.
+          :cwd                => safe_cwd(home),
+          :custom_environment => {
+            'HOME'                    => home,
+            # brew dereferences $USER under `set -u`; a launchd-started agent
+            # has none, aborting with "unbound variable".
+            'USER'                    => passwd.name,
+            'LOGNAME'                 => passwd.name,
+            # Reads must not trigger a network `brew update` mid-run.
+            'HOMEBREW_NO_AUTO_UPDATE' => '1',
+          },
           :failonfail         => failonfail,
         }
 
@@ -97,6 +109,12 @@ module PuppetX
         else
           Puppet::Util::Execution.execute(cmd, opts)
         end
+      end
+
+      # A working directory the brew owner can read; /tmp when their home is
+      # missing (service accounts).
+      def safe_cwd(home)
+        home && File.directory?(home) ? home : '/tmp'
       end
     end
   end

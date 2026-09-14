@@ -1,6 +1,6 @@
 {
   "name": "puppet-homebrew",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "author": "usm",
   "summary": "Homebrew (+brewcask! +taps! +pins! +services! +bundle!) package installer and provider",
   "license": "Apache-2.0",

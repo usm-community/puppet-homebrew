@@ -23,9 +23,10 @@ Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package)
   commands :stat => '/usr/bin/stat'
 
   def self.execute(cmd, failonfail = false, combine = false)
-    owner = stat('-nf', '%Uu', "#{@brewbin}").to_i
-    group = stat('-nf', '%Ug', "#{@brewbin}").to_i
-    home  = Etc.getpwuid(owner).dir
+    owner  = stat('-nf', '%Uu', "#{@brewbin}").to_i
+    group  = stat('-nf', '%Ug', "#{@brewbin}").to_i
+    passwd = Etc.getpwuid(owner)
+    home   = passwd.dir
 
     if owner == 0
       raise Puppet::ExecutionFailure, 'Homebrew does not support installations owned by the "root" user. Please check the permissions of /usr/local/bin/brew'
@@ -40,14 +41,19 @@ Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package)
       gid = nil
     end
 
+    # brew refuses to start on a cwd it cannot read, and dereferences $USER under
+    # `set -u` while reporting it -- a launchd-started agent has neither.
+    cwd = home && File.directory?(home) ? home : '/tmp'
+    env = { 'HOME' => home, 'USER' => passwd.name, 'LOGNAME' => passwd.name }
+
     if Puppet.features.bundled_environment?
       Bundler.with_clean_env do
-        super(cmd, :uid => uid, :gid => gid, :combine => combine,
-              :custom_environment => { 'HOME' => home }, :failonfail => failonfail)
+        super(cmd, :uid => uid, :gid => gid, :combine => combine, :cwd => cwd,
+              :custom_environment => env, :failonfail => failonfail)
       end
     else
-      super(cmd, :uid => uid, :gid => gid, :combine => combine,
-            :custom_environment => { 'HOME' => home }, :failonfail => failonfail)
+      super(cmd, :uid => uid, :gid => gid, :combine => combine, :cwd => cwd,
+            :custom_environment => env, :failonfail => failonfail)
     end
   end
 
