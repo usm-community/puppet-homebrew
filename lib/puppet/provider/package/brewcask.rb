@@ -151,17 +151,23 @@ Puppet::Type.type(:package).provide(:brewcask, :parent => Puppet::Provider::Pack
   def self.package_list(options={})
     Puppet.debug "Listing installed packages"
     begin
+      # combine: false keeps brew's stderr out of the parse: merged in, those
+      # lines become phantom packages or nil entries, and one nil entry fails
+      # the whole prefetch with "No resource and no name in property hash".
       if resource_name = options[:justme]
-        result = run_brew('list', '--cask', '--versions', resource_name)
+        # failonfail: false -- a cask that isn't installed is the nominal case
+        # for a first install or for `ensure => absent`, not an error.
+        result = run_brew('list', '--cask', '--versions', resource_name,
+                          failonfail: false, combine: false).to_s
         if result.empty?
           Puppet.debug "Package #{resource_name} not installed"
         else
           Puppet.debug "Found package #{result}"
         end
+        list = result.lines.map { |line| name_version_split(line) }.compact
       else
-        result = run_brew('list', '--cask', '--versions')
+        list = installed_list
       end
-      list = result.lines.map { |line| name_version_split(line) }
     rescue Puppet::ExecutionFailure => detail
       raise Puppet::Error, "Could not list packages: #{detail}"
     end
@@ -173,7 +179,41 @@ Puppet::Type.type(:package).provide(:brewcask, :parent => Puppet::Provider::Pack
     end
   end
 
+  # Full inventory. The JSON listing is preferred -- it does not abort with
+  # "Cask <token> exists in multiple taps" the way the text one does as soon as
+  # two taps ship the same token -- but it is not always available; see
+  # brew_list_json in PuppetX::Homebrew::BrewCommand.
+  def self.installed_list
+    parsed = brew_list_json('--cask')
+    if parsed
+      return Array(parsed['casks']).map { |pkg| package_hash(pkg['token'], pkg['versions']) }.compact
+    end
+
+    Puppet.debug 'brew has no JSON listing (jq missing?), falling back to the text listing'
+    run_brew('list', '--cask', '--versions', combine: false).to_s
+      .lines.map { |line| name_version_split(line) }.compact
+  end
+
+  def self.package_hash(name, versions)
+    return nil if name.nil? || name.empty?
+
+    # Truncated like name_version_split and `latest`, which both parse a version
+    # with /[.\d]+/: brew reports "<version>,<revision>" (4.89.0,238018), and
+    # reporting the full string here would make `ensure => latest` upgrade on
+    # every run.
+    version = Array(versions).first.to_s[/\A[.\d]+/]
+    return nil if version.nil?
+
+    {
+      :name     => name,
+      :ensure   => version,
+      :provider => :brewcask
+    }
+  end
+
   def self.name_version_split(line)
+    return nil if line.strip.empty?
+
     if line =~ (/^(\S+)\s+([.\d]+)/)
       {
         :name     => $1,

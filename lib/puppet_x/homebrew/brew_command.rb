@@ -1,4 +1,5 @@
 require 'etc'
+require 'json'
 
 module PuppetX
   module Homebrew
@@ -50,6 +51,25 @@ module PuppetX
       # returns the output instead of raising Puppet::ExecutionFailure.
       def run_brew(*args, combine: true, failonfail: true)
         run_owned(command(:brew), *args, combine: combine, failonfail: failonfail)
+      end
+
+      # Parsed `brew list --json --versions [extra args]`, or nil when brew
+      # cannot serve it -- `--json` exists only in brew's Bash fast path
+      # (list.sh), which needs `jq`; cmd/list.rb raises a UsageError for it, and
+      # macOS ships /usr/bin/jq only from 15 on, so callers keep a text
+      # fallback. Preferred where available: nothing to misparse, and no "Cask
+      # <token> exists in multiple taps" abort losing the whole listing.
+      #
+      # combine: false -- brew writes tap deprecation warnings to stderr, and
+      # merged output is not parseable JSON.
+      def brew_list_json(*args)
+        output = run_brew('list', '--json', '--versions', *args, failonfail: false, combine: false)
+        return nil if output.respond_to?(:exitstatus) && !output.exitstatus.zero?
+
+        JSON.parse(output.to_s)
+      rescue JSON::ParserError => detail
+        Puppet.debug "Could not parse the brew JSON listing: #{detail}"
+        nil
       end
 
       # Run an arbitrary command as the brew owner, using the same privilege

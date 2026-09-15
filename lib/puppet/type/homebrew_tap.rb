@@ -92,12 +92,37 @@ Puppet::Type.newtype(:homebrew_tap) do
 
   newproperty(:trust) do
     desc <<-DOC
-      When true, trust the tap with `brew trust --tap user/repo`; when false,
-      revoke it with `brew untrust --tap user/repo`. Trusting is required to
-      load formulae/casks/commands from non-official taps once
+      When true, trust the tap with `brew trust --tap`; when false, revoke it
+      with `brew untrust --tap`. Trusting is required to load
+      formulae/casks/commands from non-official taps once
       `HOMEBREW_REQUIRE_TAP_TRUST` is set (the default from Homebrew 6.0.0).
       Official homebrew/* taps are always trusted. When unspecified, trust is
       not managed.
+
+      Trust is granted before the tap is cloned: `brew tap` validates a new tap
+      by loading its formulae and casks, which an untrusted tap refuses, and
+      brew surfaces that as "Cannot tap <name>: invalid syntax in tap!" before
+      deleting the clone. A tap containing casks therefore cannot be tapped at
+      all without `trust => true`.
+
+      When `url` is set, trust is recorded against that URL rather than the
+      `user/repo` name. Homebrew matches a `user/repo` trust entry only against
+      a tap on its canonical github.com remote; `brew trust --tap user/repo`
+      resolves the name to the tap's real remote, but only once the tap is
+      cloned. Trust being granted before the clone, the URL has to be given
+      explicitly or the recorded entry would never match.
+
+      A grant that matches nothing looks exactly like a successful one, so two
+      things matter: the URL must be spelled as git records the remote (outside
+      github.com, gitlab.com and codeberg.org a `.git` suffix or a trailing
+      slash is significant), and the trust store is per user -- Puppet writes
+      the brew owner's `$HOME/.homebrew/trust.json`, not the one of whoever runs
+      `brew trust` in a terminal.
+
+      Changing `url` moves the trust reference: the provider re-applies trust
+      and drops the stale entry, since Homebrew migrates one only on a git
+      redirect. `ensure => absent` revokes trust too, but only when this
+      resource manages it -- `brew untap` leaves the store untouched.
     DOC
 
     newvalues(:true, :false)

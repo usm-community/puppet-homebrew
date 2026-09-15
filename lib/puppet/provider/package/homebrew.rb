@@ -146,31 +146,28 @@ Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Pack
     begin
       if resource_name = options[:justme]
         escaped = Regexp.escape(resource_name)
-        # Targeted single-package lookup: cheaper than two full lists.
-        #
-        # brew exits non-zero when the named package isn't installed, so
-        # failonfail must be off — "not installed" is the nominal case for
-        # `ensure => absent` (and for the first install of any package), not an
-        # error. `brew list --versions <name>` only matches formulae, so fall
-        # back to a cask-scoped lookup before concluding the package is absent;
-        # otherwise an installed cask is misreported and never uninstalled.
-        result = run_brew('list', '--versions', resource_name, failonfail: false).to_s
-        result = run_brew('list', '--versions', '--cask', resource_name, failonfail: false).to_s if result.empty?
+        # Targeted lookup, cheaper than a full inventory. failonfail: false --
+        # brew exits non-zero for a package that simply isn't installed, the
+        # nominal case for `ensure => absent` and for any first install.
+        # `brew list --versions <name>` matches formulae only, hence the
+        # cask-scoped retry, or an installed cask is never uninstalled.
+        # combine: false keeps brew's stderr out of the parse (see text_listing).
+        result = run_brew('list', '--versions', resource_name, failonfail: false, combine: false).to_s
+        if result.empty?
+          result = run_brew('list', '--versions', '--cask', resource_name, failonfail: false, combine: false).to_s
+        end
         matched = result.lines.grep(/^#{escaped} /).first
         if matched.nil?
           Puppet.debug "Package #{resource_name} not installed"
-          result = ''
+          list = []
         else
           Puppet.debug "Found package #{resource_name}"
-          result = matched
-          Puppet.debug "Stored #{result} in package_list"
+          Puppet.debug "Stored #{matched} in package_list"
+          list = [name_version_split(matched)].compact
         end
       else
-        result = run_brew('list', '--versions', '--cask')
-        result += run_brew('list', '--versions', '--formulae')
+        list = installed_list
       end
-
-      list = result.lines.map { |line| name_version_split(line) }
     rescue Puppet::ExecutionFailure => detail
       raise Puppet::Error, "Could not list packages: #{detail}"
     end
@@ -182,7 +179,50 @@ Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Pack
     end
   end
 
+  # Full inventory. The JSON listing is preferred but not always available;
+  # see brew_list_json in PuppetX::Homebrew::BrewCommand.
+  def self.installed_list
+    parsed = brew_list_json
+    return json_package_list(parsed) if parsed
+
+    Puppet.debug 'brew has no JSON listing (jq missing?), falling back to the text listing'
+    text_listing
+  end
+
+  def self.json_package_list(parsed)
+    casks    = Array(parsed['casks']).map { |pkg| package_hash(pkg['token'], pkg['versions']) }
+    formulae = Array(parsed['formulae']).map { |pkg| package_hash(pkg['name'], pkg['versions']) }
+
+    (casks + formulae).compact
+  end
+
+  # Text listing fallback. combine: false is what keeps brew's stderr out of the
+  # parse: merged in (Puppet's default), a tap deprecation notice turned into
+  # phantom packages and nil entries, and one nil entry fails the prefetch of
+  # every package in the catalog with "No resource and no name in property hash".
+  def self.text_listing
+    result = run_brew('list', '--versions', '--cask', combine: false).to_s
+    result += run_brew('list', '--versions', '--formulae', combine: false).to_s
+
+    result.lines.map { |line| name_version_split(line) }.compact
+  end
+
+  def self.package_hash(name, versions)
+    return nil if name.nil? || name.empty?
+
+    version = Array(versions).reject { |v| v.nil? || v.empty? }.join(' ')
+    {
+      :name     => name,
+      # A cask with no recorded version is still installed: report it present
+      # rather than dropping it, or Puppet reinstalls it on every run.
+      :ensure   => version.empty? ? :present : version,
+      :provider => :homebrew
+    }
+  end
+
   def self.name_version_split(line)
+    return nil if line.strip.empty?
+
     if line =~ (/^(\S+)\s+(.+)/)
       {
         :name     => $1,

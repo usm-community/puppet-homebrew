@@ -1,16 +1,26 @@
 class homebrew::install {
 
-  # Homebrew install target depends on architecture.
+  # Homebrew/install dropped Intel on 2026-09-11 (e078684): HEAD now aborts on
+  # x86_64 and only knows the /opt/homebrew prefix. brew itself still runs on
+  # Intel, so Intel is pinned to the last installer commit supporting it, which
+  # already knows macOS 27 and still checks out the latest brew tag.
+  $homebrew_install_commit = '0f5b7666a65fc2d1a2615549f02771353c250f9a'
+
+  # Everything architecture dependent is decided from this single test: a second
+  # test written differently (e.g. a `true =>` selector) would disagree with it
+  # as soon as the fact arrives stringified, from a cached facts.yaml or an ENC.
   if $facts['is_arm64'] {
-    $brew_root          = '/opt/homebrew'
-    $inst_dir           = $brew_root
-    $link_bin           = false
-    $brew_folders_extra = []
+    $brew_root             = '/opt/homebrew'
+    $inst_dir              = $brew_root
+    $link_bin              = false
+    $brew_folders_extra    = []
+    $homebrew_install_url  = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
   } else {
-    $brew_root          = '/usr/local'
-    $inst_dir           = "${brew_root}/Homebrew"
-    $link_bin           = true
-    $brew_folders_extra = ["${brew_root}/Homebrew"]
+    $brew_root             = '/usr/local'
+    $inst_dir              = "${brew_root}/Homebrew"
+    $link_bin              = true
+    $brew_folders_extra    = ["${brew_root}/Homebrew"]
+    $homebrew_install_url  = "https://raw.githubusercontent.com/Homebrew/install/${homebrew_install_commit}/install.sh"
   }
 
   $brew_sys_folders = [
@@ -96,7 +106,7 @@ class homebrew::install {
   }
 
   $homebrew_install_script = '/tmp/homebrew-install.sh'
-  $homebrew_install_url = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
+
   $homebrew_install_cmd = join([
     '/usr/bin/curl -fsSL -o',
     $homebrew_install_script,

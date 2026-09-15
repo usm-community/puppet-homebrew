@@ -187,11 +187,15 @@ Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package)
         return name_version_split(line)
       end
     else
-      return lines.map{ |line| name_version_split(line) }
+      # compact: one nil entry fails the whole prefetch with "No resource and
+      # no name in property hash".
+      return lines.map{ |line| name_version_split(line) }.compact
     end
   end
 
   def self.name_version_split(line)
+    return nil if line.strip.empty?
+
     if line =~ (/^(\S+)\s+(.+)/)
       {
         :name     => $1,

@@ -9,6 +9,12 @@ This module supports Puppet version 4 and greater running on Ruby version 1.8.3
 and greater. Note that versions of Ruby from 2.0.x to 2.2.x may no longer be
 supported by Homebrew. For Puppet 3 support, please pin to version 1.7.1.
 
+On Intel Macs the module installs Homebrew from a pinned copy of the official
+installer, upstream's ``HEAD`` having dropped x86_64 in September 2026. ``brew``
+still works there, but Intel is a "Tier 3" platform and its bottles stop at
+Sonoma: on a newer macOS, formulae build from source, which needs the compiler
+installed by ``homebrew::compiler``.
+
 puppet-homebrew is available on the `Puppet Forge`_.
 
 Usage
@@ -84,6 +90,38 @@ Additional options are available for third-party taps:
   non-official tap is required to load its formulae, casks and commands once
   ``HOMEBREW_REQUIRE_TAP_TRUST`` is set (the default from Homebrew 6.0.0).
   Official ``homebrew/*`` taps are always trusted.
+
+  Trust is applied **before** the clone: ``brew tap`` validates a new tap by
+  loading its formulae and casks, which an untrusted tap refuses, and brew
+  reports that as a syntax error before deleting the half-made clone::
+
+      Refusing to load cask mycompany/tools/foo from untrusted tap mycompany/tools.
+      Error: Cannot tap mycompany/tools: invalid syntax in tap!
+
+  A tap containing casks therefore cannot be tapped at all without
+  ``trust => true``.
+
+  When ``url`` is set, trust is recorded against the **URL**: Homebrew matches a
+  ``user/repo`` entry only against a tap on its canonical
+  ``github.com/user/homebrew-repo`` remote, and cannot resolve the real remote
+  before the clone. That URL must be spelled exactly as git records it — outside
+  ``github.com``, ``gitlab.com`` and ``codeberg.org``, ``.../repo`` and
+  ``.../repo.git`` are two distinct entries and only one matches the tap.
+
+  Trust is also stored **per user**, in ``$HOME/.homebrew/trust.json`` of the
+  account running ``brew`` — the ``$user`` this module installs Homebrew under,
+  not ``root`` and not the logged-in one. A machine that works interactively can
+  still fail under Puppet, and vice versa.
+
+  Either trap yields a tap that is never trusted, which Homebrew reports no
+  differently from a successful grant, so the provider re-reads
+  ``brew tap-info`` and warns when the state disagrees with what was declared.
+
+  Changing ``url`` moves the trust reference (Homebrew migrates an entry only on
+  a git redirect) and clears the tap's ``homebrew.forceautoupdate``, so both are
+  re-applied and the stale entry dropped. ``ensure => absent`` revokes trust as
+  well when this resource declares it — ``brew untap`` leaves the store
+  untouched, so the entry would otherwise outlive the tap.
 * ``force`` — passes ``--force`` to ``brew tap`` (e.g. to force-clone
   ``homebrew/cask`` even though it is otherwise served from the JSON API) and to
   ``brew untap`` (to allow ``ensure => absent`` even while formulae or casks from
