@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## 3.2.1 (2026-10-16)
 - fix: `ensure => latest` no longer upgrades on every run, nor fails, with the `homebrew` and `brewcask` providers: `latest` relied on parsing `brew info`'s text output
 - change: brew now decides which packages are outdated (`brew info` / `brew outdated` JSON, one set of calls per run); an up-to-date or pinned package keeps its installed value
 - change: packages from an untrusted tap are no longer upgraded; a warning is logged instead
