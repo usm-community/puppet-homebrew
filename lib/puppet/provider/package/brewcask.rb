@@ -96,7 +96,7 @@ Puppet::Type.type(:package).provide(:brewcask, :parent => Puppet::Provider::Pack
   end
 
   def query
-    self.class.package_list(:justme => resource_name)
+    self.class.tap_checked_query(@resource, resource_name, [:cask])
   end
 
   def install
@@ -172,7 +172,8 @@ Puppet::Type.type(:package).provide(:brewcask, :parent => Puppet::Provider::Pack
       if resource_name = options[:justme]
         # failonfail: false -- a cask that isn't installed is the nominal case
         # for a first install or for `ensure => absent`, not an error.
-        result = run_brew('list', '--cask', '--versions', resource_name,
+        # Asked by short name: `brew list --cask` rejects `user/tap/name`.
+        result = run_brew('list', '--cask', '--versions', parse_package_name(resource_name)[2],
                           failonfail: false, combine: false).to_s
         if result.empty?
           Puppet.debug "Package #{resource_name} not installed"

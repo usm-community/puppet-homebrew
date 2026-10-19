@@ -103,7 +103,7 @@ Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Pack
   end
 
   def query
-    self.class.package_list(:justme => resource_name)
+    self.class.tap_checked_query(@resource, resource_name, [:formula, :cask])
   end
 
   def install
@@ -163,16 +163,19 @@ Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Pack
     Puppet.debug "Listing installed packages"
     begin
       if resource_name = options[:justme]
-        escaped = Regexp.escape(resource_name)
+        # Asked and listed by short name: `brew list --cask` rejects
+        # `user/tap/name`. The tap is checked by tap_checked_query.
+        short   = parse_package_name(resource_name)[2]
+        escaped = Regexp.escape(short)
         # Targeted lookup, cheaper than a full inventory. failonfail: false --
         # brew exits non-zero for a package that simply isn't installed, the
         # nominal case for `ensure => absent` and for any first install.
         # `brew list --versions <name>` matches formulae only, hence the
         # cask-scoped retry, or an installed cask is never uninstalled.
         # combine: false keeps brew's stderr out of the parse (see text_listing).
-        result = run_brew('list', '--versions', resource_name, failonfail: false, combine: false).to_s
+        result = run_brew('list', '--versions', short, failonfail: false, combine: false).to_s
         if result.empty?
-          result = run_brew('list', '--versions', '--cask', resource_name, failonfail: false, combine: false).to_s
+          result = run_brew('list', '--versions', '--cask', short, failonfail: false, combine: false).to_s
         end
         matched = result.lines.grep(/^#{escaped} /).first
         if matched.nil?

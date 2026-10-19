@@ -14,18 +14,19 @@ Puppet::Type.type(:homebrew_service).provide(:brew) do
   commands :brew => @brewbin
   commands :stat => '/usr/bin/stat'
 
-  def run_brew(*args)
-    self.class.run_brew(*args)
+  def run_brew(*args, **opts)
+    self.class.run_brew(*args, **opts)
   end
 
   # `brew services list --json` returns an array of objects exposing the
   # service `name` and `status` (started/stopped/none/error/scheduled).
+  # An unreadable list fails the prefetch: an empty one would hide every
+  # service's real state. Older brew prints nothing, not `[]`, when there
+  # are no services.
   def self.service_list
-    output = run_brew('services', 'list', '--json')
-    JSON.parse(output)
-  rescue StandardError => e
-    Puppet.debug("Could not read homebrew services: #{e}")
-    []
+    brew_json('services', 'list', '--json', empty: [])
+  rescue Puppet::ExecutionFailure => e
+    raise Puppet::Error, "Could not read homebrew services: #{e}"
   end
 
   def self.instances
@@ -45,11 +46,7 @@ Puppet::Type.type(:homebrew_service).provide(:brew) do
     end
   end
 
-  def initialize(value = {})
-    super(value)
-    @property_hash = value.dup
-  end
-
+  # A service missing from the list is stopped.
   def status
     @property_hash[:ensure] || :stopped
   end

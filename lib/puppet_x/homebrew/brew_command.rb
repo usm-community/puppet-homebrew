@@ -14,6 +14,7 @@ module PuppetX
     module BrewCommand
       INTEL_BREW         = '/usr/local/bin/brew'.freeze
       APPLE_SILICON_BREW = '/opt/homebrew/bin/brew'.freeze
+      OFFICIAL_TAPS      = { formula: 'homebrew/core', cask: 'homebrew/cask' }.freeze
 
       # Locate the brew binary. The default prefix is architecture-dependent
       # (/opt/homebrew on Apple Silicon, /usr/local on Intel), so we use the
@@ -79,7 +80,7 @@ module PuppetX
       # `brew info`, unlike `brew outdated`, includes untrusted taps.
       def outdated_formulae
         list = {}
-        Array(brew_json('info', '--json=v2', '--installed', '--formula')['formulae']).each do |formula|
+        installed_info(:formula).each do |formula|
           next unless formula['outdated']
 
           stable   = formula.dig('versions', 'stable').to_s
@@ -99,7 +100,7 @@ module PuppetX
       def outdated_casks
         list = {}
         taps = {}
-        Array(brew_json('info', '--json=v2', '--installed', '--cask')['casks']).each do |cask|
+        installed_info(:cask).each do |cask|
           taps[cask['token'].to_s] = cask['tap']
           next unless cask['outdated']
 
@@ -110,6 +111,20 @@ module PuppetX
           list[name] = { 'version' => cask['current_version'].to_s, 'tap' => taps[name.split('/').last] }
         end
         list
+      end
+
+      # `brew info --json=v2 --installed` entries of one kind (:formula or
+      # :cask), fetched once per run. A failure is kept and raised again.
+      def installed_info(kind)
+        @installed_info ||= {}
+        @installed_info[kind] ||= begin
+          Array(brew_json('info', '--json=v2', '--installed', "--#{kind}")[kind == :cask ? 'casks' : 'formulae'])
+        rescue Puppet::ExecutionFailure => detail
+          detail
+        end
+        raise @installed_info[kind] if @installed_info[kind].is_a?(Exception)
+
+        @installed_info[kind]
       end
 
       # Whether the brew owner has not trusted `tap` (trust is per user).
@@ -132,22 +147,92 @@ module PuppetX
       def forget_brew_state
         @outdated       = nil
         @untrusted_taps = nil
+        @installed_info = nil
       end
 
       # Exact name first, then short name (tapped packages are keyed in full).
+      # A qualified name only matches an entry from its own tap.
       def outdated_lookup(list, name)
         return list[name] if list.key?(name)
 
-        short = name.split('/').last
-        list.each { |key, entry| return entry if key.split('/').last == short }
+        qualified, tap, short = parse_package_name(name)
+        list.each do |key, entry|
+          next unless key.split('/').last == short
+          return entry if !qualified || third_party_tap(entry['tap']) == tap
+        end
         nil
       end
 
+      # [qualified?, tap, short name] of a package name. `user/repo/name` is
+      # qualified; tap is nil for a bare name or an official tap.
+      def parse_package_name(name)
+        parts = name.to_s.split('/')
+        return [false, nil, name.to_s] if parts.size != 3 || name.to_s =~ %r{\Ahttps?://}
+
+        [true, third_party_tap(tap_name(parts[0], parts[1])), parts[2]]
+      end
+
+      # A tap named as brew names it (Tap.fetch): `user/homebrew-repo` is
+      # `user/repo`.
+      def tap_name(user, repo)
+        user = user.downcase
+        repo = repo.downcase.sub(/\A(?:home|linux)brew-/, '')
+        return 'homebrew/core' if %w[homebrew linuxbrew].include?(user) && %w[core homebrew].include?(repo)
+
+        "#{user}/#{repo}"
+      end
+
+      # nil for an official tap or none, the tap otherwise.
+      def third_party_tap(tap)
+        tap.nil? || OFFICIAL_TAPS.value?(tap) ? nil : tap
+      end
+
+      # [kind, tap] an installed package was installed from, by short name,
+      # in `kinds` order; tap is nil for an official one.
+      def installed_origin(short, kinds)
+        kinds.each do |kind|
+          key   = kind == :cask ? 'token' : 'name'
+          entry = installed_info(kind).find { |pkg| pkg[key].to_s == short }
+          return [kind, third_party_tap(entry['tap'])] if entry
+        end
+        nil
+      end
+
+      # A package declared as `user/tap/name` but installed from another tap is
+      # left as is with this warning; nil otherwise.
+      def other_tap_warning(name, kinds)
+        qualified, tap, short = parse_package_name(name)
+        return nil unless qualified
+
+        kind, origin = installed_origin(short, kinds)
+        return nil if kind.nil? || origin == tap
+
+        "#{short} is installed from #{origin || OFFICIAL_TAPS[kind]}, not #{name.to_s.rpartition('/').first}; leaving it as is"
+      rescue Puppet::ExecutionFailure => detail
+        Puppet.debug "Could not check where #{name} was installed from: #{detail}"
+        nil
+      end
+
+      # `query` for a package that may be named `user/tap/name`. One installed
+      # from another tap is found, but absent for ensure => absent: brew
+      # refuses to uninstall it under that name.
+      def tap_checked_query(resource, name, kinds)
+        found   = package_list(:justme => name)
+        warning = found && other_tap_warning(name, kinds)
+        return found unless warning
+
+        resource.warning warning
+        resource[:ensure] == :absent ? nil : found
+      end
+
       # Parsed JSON output of a brew command. stderr is kept out of the parse,
-      # and fetched again on failure for the error message.
-      def brew_json(*cmd)
+      # and fetched again on failure for the error message. `empty` is
+      # returned when the command succeeds without output.
+      def brew_json(*cmd, empty: nil)
         output = run_brew(*cmd, failonfail: false, combine: false)
         if !output.respond_to?(:exitstatus) || output.exitstatus.zero?
+          return empty if !empty.nil? && output.to_s.strip.empty?
+
           begin
             parsed = JSON.parse(output.to_s)
             return parsed if parsed.is_a?(Hash) || parsed.is_a?(Array)

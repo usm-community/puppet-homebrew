@@ -45,6 +45,10 @@ The providers works as follows:
 * ``provider => homebrew``: attempt to install using ``brew install <module>``. On
   failure, use ``brew cask install <module>``
 
+With ``homebrew`` and ``brewcask``, a package can be named ``user/tap/name`` to
+pick a tap. If it is installed from another tap, it is left as is and a warning
+is logged.
+
 Tapping Repositories
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -328,6 +332,11 @@ requires the puppet user act as the homebrew user, you may get a password
 prompt on each run. This can be fixed by allowing the puppet user passwordless
 sudo privileges to the homebrew user.
 
+On Intel, the homebrew user needs passwordless sudo (``NOPASSWD``) to install
+Homebrew: the installer stops without it, and prepares the directories through
+sudo. It only runs while brew is missing. Apple Silicon does not need it, as
+the module creates ``/opt/homebrew`` for the homebrew user beforehand.
+
 If you are looking for a multi-user installation, please be sure to set the
 multi-user flag, eg.:
 
@@ -359,6 +368,39 @@ both a package name and source URL:
       command_line_tools_package => 'command_line_tools_for_xcode_os_x_lion_april_2013.dmg',
       command_line_tools_source  => 'http://devimages.apple.com/downloads/xcode/command_line_tools_for_xcode_os_x_lion_april_2013.dmg',
     }
+
+Facts
+~~~~~
+
+The ``homebrew`` fact gives the Homebrew layout this module uses, from the
+processor rather than the agent's architecture:
+
+.. code-block:: puppet
+
+    $facts['homebrew']['prefix']      # /opt/homebrew or /usr/local
+    $facts['homebrew']['repository']  # /opt/homebrew or /usr/local/Homebrew
+    $facts['homebrew']['brew']        # <prefix>/bin/brew
+    $facts['homebrew']['installed']   # whether brew is there
+
+An Intel agent on Apple Silicon gets the Apple Silicon paths, but cannot install
+Homebrew or formulae there: the installer and brew refuse to run under Rosetta.
+Use the arm64 agent.
+
+The other facts are booleans:
+
+``is_arm64``
+    Whether the processor is Apple Silicon, including for an Intel agent under
+    Rosetta.
+
+``has_brew``
+    Whether brew is installed, under either prefix or in the ``PATH``. Unlike
+    ``homebrew.installed``, it does not check the expected prefix.
+
+``has_compiler``
+    Whether Xcode or the Command Line Tools are installed with a C compiler.
+    ``homebrew::compiler`` installs the Command Line Tools when it is false.
+
+All these facts are set on macOS only.
 
 Adding a Github Token
 ~~~~~~~~~~~~~~~~~~~~~

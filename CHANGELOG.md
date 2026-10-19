@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 3.3.0 (2026-10-19)
+- fix: installing the Command Line Tools via `softwareupdate` never worked: the label lookup was broken by its quoting, so `softwareupdate -i` ran with an empty label and the failure went unreported. An empty label now fails the resource. The placeholder that makes `softwareupdate` list the Command Line Tools is created and removed by the install itself, even when it fails
+- fix: `homebrew::update` runs `brew update` from `/tmp`. `su` kept Puppet's working directory, which brew refuses when its user cannot read it; `|| true` hide the failure and the update was retried on every run. It runs through bash, whatever the brew user's login shell
+- fix: `homebrew_service` reports services' real state. A brew warning on stderr (e.g. when run through `sudo`) made the service list unparseable, and a service missing from the list was reported in its desired state, so nothing was started or stopped and nothing was reported. A missing service is now stopped, and an unreadable list fails the prefetch; an empty one, as older brew prints when there are no services, is no service
+- fix: a package named `user/tap/name` is found installed by the `homebrew` and `brewcask` providers. It was always reported absent, so it was reinstalled on every run and never uninstalled. If it was installed from another tap, it is left as is with a warning, `ensure => absent` included; `ensure => latest` only considers its own tap. The tap is matched as brew names it, so `user/homebrew-tap` is `user/tap`
+- fix: on Apple Silicon, `/opt/homebrew` is created and given to the brew user before installing. It was not managed: on a new Mac its subdirectories failed on the first run, and the installer needed passwordless sudo to create it
+- docs: installing Homebrew on Intel requires passwordless sudo for the homebrew user
+- security: the Homebrew installer is run from memory instead of `/tmp/homebrew-install.sh`. Another local user could replace that file between its download and its run, and run code as the brew user. It runs through bash, whatever the brew user's login shell
+- feature: the `homebrew` fact gives the Homebrew layout (`prefix`, `repository`, `brew`, `installed`), from the processor rather than the agent's architecture. `homebrew::install` reads it, and fails clearly when it is missing instead of falling back to the Intel layout. An Intel agent on Apple Silicon cannot install Homebrew: use the arm64 agent
+
 ## 3.2.1 (2026-10-16)
 - fix: `ensure => latest` no longer upgrades on every run, nor fails, with the `homebrew` and `brewcask` providers: `latest` relied on parsing `brew info`'s text output
 - change: brew now decides which packages are outdated (`brew info` / `brew outdated` JSON, one set of calls per run); an up-to-date or pinned package keeps its installed value

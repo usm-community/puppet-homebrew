@@ -6,21 +6,41 @@ class homebrew::install {
   # already knows macOS 27 and still checks out the latest brew tag.
   $homebrew_install_commit = '0f5b7666a65fc2d1a2615549f02771353c250f9a'
 
-  # Everything architecture dependent is decided from this single test: a second
-  # test written differently (e.g. a `true =>` selector) would disagree with it
-  # as soon as the fact arrives stringified, from a cached facts.yaml or an ENC.
-  if $facts['is_arm64'] {
-    $brew_root             = '/opt/homebrew'
-    $inst_dir              = $brew_root
-    $link_bin              = false
-    $brew_folders_extra    = []
-    $homebrew_install_url  = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
+  # The layout comes from the homebrew fact, so that site manifests reading it
+  # agree with this class.
+  unless $facts['homebrew'] {
+    fail('The homebrew fact is missing: is pluginsync enabled?')
+  }
+  $brew_root = $facts['homebrew']['prefix']
+  $inst_dir  = $facts['homebrew']['repository']
+  $brew      = $facts['homebrew']['brew']
+
+  # A repository apart from the prefix (Intel) is managed, and brew linked
+  # from it.
+  $link_bin           = $inst_dir != $brew_root
+  $brew_folders_extra = $link_bin ? { true => [$inst_dir], default => [] }
+
+  if $brew_root == '/opt/homebrew' {
+    $homebrew_install_url = 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
+
+    # Homebrew owns its prefix: created here, or the installer needs sudo to
+    # create it. Recent macOS ship /opt, older ones may not, and a file
+    # resource does not create parents.
+    unless defined(File['/opt']) {
+      file { '/opt':
+        ensure => directory,
+      }
+    }
+    unless defined(File[$brew_root]) {
+      file { $brew_root:
+        ensure => directory,
+        owner  => $homebrew::user,
+        group  => $homebrew::group,
+      }
+    }
+    File[$brew_root] -> Exec['install-homebrew']
   } else {
-    $brew_root             = '/usr/local'
-    $inst_dir              = "${brew_root}/Homebrew"
-    $link_bin              = true
-    $brew_folders_extra    = ["${brew_root}/Homebrew"]
-    $homebrew_install_url  = "https://raw.githubusercontent.com/Homebrew/install/${homebrew_install_commit}/install.sh"
+    $homebrew_install_url = "https://raw.githubusercontent.com/Homebrew/install/${homebrew_install_commit}/install.sh"
   }
 
   $brew_sys_folders = [
@@ -105,27 +125,24 @@ class homebrew::install {
     }
   }
 
-  $homebrew_install_script = '/tmp/homebrew-install.sh'
+  # Run from memory, as Homebrew documents it: a file in /tmp could be
+  # replaced by another local user before it runs. && stops on a failed
+  # download, where bash -c "$(curl ...)" would run an empty script.
+  $homebrew_install_cmd = "script=\$(/usr/bin/curl -fsSL ${homebrew_install_url}) && /usr/bin/env NONINTERACTIVE=1 /bin/bash -c \"\$script\"" # lint:ignore:140chars
 
-  $homebrew_install_cmd = join([
-    '/usr/bin/curl -fsSL -o',
-    $homebrew_install_script,
-    $homebrew_install_url,
-    '&&',
-    '/usr/bin/env NONINTERACTIVE=1 /bin/bash',
-    $homebrew_install_script,
-  ], ' ')
-
+  # su hands the command to the brew user's login shell, which may not be
+  # sh-compatible: it only gets a quoted string to pass to bash. As an array,
+  # the command skips Puppet's own shell.
   exec { 'install-homebrew':
     cwd       => '/tmp',
-    command   => "/usr/bin/su ${homebrew::user} -c '${homebrew_install_cmd}'",
-    creates   => "${brew_root}/bin/brew",
+    command   => ['/usr/bin/su', $homebrew::user, '-c', "/bin/bash -c '${homebrew_install_cmd}'"],
+    creates   => $brew,
     logoutput => on_failure,
     timeout   => 0,
   }
 
   if $link_bin {
-    file { "${brew_root}/bin/brew":
+    file { $brew:
       ensure => link,
       target => "${inst_dir}/bin/brew",
       owner  => $homebrew::user,
