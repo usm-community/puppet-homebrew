@@ -1,7 +1,7 @@
 # Pin an installed formula so `brew upgrade` leaves it alone.
 package { 'postgresql@14':
   ensure   => present,
-  provider => brew,
+  provider => homebrew,
 }
 
 homebrew_pin { 'postgresql@14':

@@ -7,10 +7,10 @@ module PuppetX
     # (homebrew_tap, homebrew_pin, homebrew_service, homebrew_bundle).
     #
     # `extend` this module into a provider class that has already declared
-    # `commands :brew => ...` and `commands :stat => '/usr/bin/stat'`. It then
-    # exposes `detect_brew_bin` (to pick the brew path at class-load time) and
-    # `run_brew` (which drops privileges to the brew owner, since Homebrew
-    # refuses to run as root while Puppet usually does).
+    # `commands :brew => ...`. It then exposes `detect_brew_bin` (to pick the
+    # brew path at class-load time) and `run_brew` (which drops privileges to
+    # the brew owner, since Homebrew refuses to run as root while Puppet usually
+    # does).
     module BrewCommand
       INTEL_BREW         = '/usr/local/bin/brew'.freeze
       APPLE_SILICON_BREW = '/opt/homebrew/bin/brew'.freeze
@@ -254,11 +254,10 @@ module PuppetX
       # (default true, matching Puppet's usual behaviour); set false when the
       # caller parses stdout.
       def run_owned(*cmd, combine: true, failonfail: true)
-        brew_path = command(:brew)
-        owner     = stat('-nf', '%Uu', brew_path).to_i
-        group     = stat('-nf', '%Ug', brew_path).to_i
-        passwd    = Etc.getpwuid(owner)
-        home      = passwd.dir
+        brew_path    = command(:brew)
+        owner, group = brew_owner(brew_path)
+        passwd       = Etc.getpwuid(owner)
+        home         = passwd.dir
 
         if owner.zero?
           raise Puppet::ExecutionFailure,
@@ -302,6 +301,15 @@ module PuppetX
         else
           Puppet::Util::Execution.execute(cmd, opts)
         end
+      end
+
+      # uid and gid of the brew binary, read in process: run before every brew
+      # command. lstat, like `stat -f`: a symlink's own owner.
+      def brew_owner(path)
+        info = File.lstat(path)
+        [info.uid, info.gid]
+      rescue SystemCallError => detail
+        raise Puppet::ExecutionFailure, "Could not read the owner of #{path}: #{detail}"
       end
 
       # A working directory the brew owner can read; /tmp when their home is

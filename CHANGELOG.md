@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 3.4.0 (2026-10-21)
+- deprecated: the `brew` package provider, to be removed in 4.0.0. It handles formulae only and never got the `homebrew` provider's fixes (`ensure => latest` never upgrades). Use `provider => homebrew`; a warning lists the packages still using it, once per run
+- improvement: the brew owner is read in process before each brew command, instead of running `/usr/bin/stat` twice
+- docs: the README and `tests/` examples use `provider => homebrew`, and the providers' descriptions match the commands they run. The first README example is valid Puppet again
+
 ## 3.3.0 (2026-10-19)
 - fix: installing the Command Line Tools via `softwareupdate` never worked: the label lookup was broken by its quoting, so `softwareupdate -i` ran with an empty label and the failure went unreported. An empty label now fails the resource. The placeholder that makes `softwareupdate` list the Command Line Tools is created and removed by the install itself, even when it fails
 - fix: `homebrew::update` runs `brew update` from `/tmp`. `su` kept Puppet's working directory, which brew refuses when its user cannot read it; `|| true` hide the failure and the update was retried on every run. It runs through bash, whatever the brew user's login shell

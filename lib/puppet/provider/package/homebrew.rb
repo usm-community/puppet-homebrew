@@ -2,7 +2,7 @@ require 'puppet/provider/package'
 require 'puppet_x/homebrew/brew_command'
 
 Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Package) do
-  desc 'Package management using HomeBrew (+ casks!) on OSX'
+  desc 'Package management using HomeBrew (+ casks!) on macOS'
 
   confine :operatingsystem => :darwin
 
@@ -16,7 +16,6 @@ Puppet::Type.type(:package).provide(:homebrew, :parent => Puppet::Provider::Pack
 
   @brewbin = detect_brew_bin
   commands :brew => @brewbin
-  commands :stat => '/usr/bin/stat'
 
   def run_brew(*args, **opts)
     self.class.run_brew(*args, **opts)

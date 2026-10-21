@@ -28,22 +28,22 @@ Use the Homebrew package provider like this:
 .. code-block:: puppet
 
     class hightower::packages {
-      pkglist = ['postgresql', 'nginx', 'git', 'tmux']
+      $pkglist = ['postgresql', 'nginx', 'git', 'tmux']
 
       package { $pkglist:
         ensure   => present,
-        provider => brew,
+        provider => homebrew,
       }
     }
 
 The providers works as follows:
 
-* ``provider => brew``: install using ``brew install <module>``. Do not use
-  brewcask.
-* ``provider => brewcask``: install using ``brew cask install <module>``. Only use
-  brewcask.
-* ``provider => homebrew``: attempt to install using ``brew install <module>``. On
-  failure, use ``brew cask install <module>``
+* ``provider => homebrew``: install using ``brew install <name>``, which takes
+  the formula, or the cask when no formula has that name.
+* ``provider => brewcask``: install using ``brew install --cask <name>``: casks
+  only.
+* ``provider => brew``: formulae only. **Deprecated**, to be removed in 4.0.0:
+  use ``homebrew`` instead. A warning lists the packages still using it.
 
 With ``homebrew`` and ``brewcask``, a package can be named ``user/tap/name`` to
 pick a tap. If it is installed from another tap, it is left as is and a warning
@@ -230,7 +230,7 @@ native ``homebrew_pin`` type. The formula must already be installed:
 
     package { 'postgresql@14':
       ensure   => present,
-      provider => brew,
+      provider => homebrew,
     }
     -> homebrew_pin { 'postgresql@14':
       ensure => present,

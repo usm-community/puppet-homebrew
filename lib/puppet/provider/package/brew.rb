@@ -1,7 +1,7 @@
 require 'puppet/provider/package'
 
 Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package) do
-  desc 'Package management using HomeBrew on OSX'
+  desc 'Package management using HomeBrew on macOS. Deprecated: use homebrew.'
 
   confine :operatingsystem => :darwin
 
@@ -55,6 +55,13 @@ Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package)
       super(cmd, :uid => uid, :gid => gid, :combine => combine, :cwd => cwd,
             :custom_environment => env, :failonfail => failonfail)
     end
+  end
+
+  # Once per run, for the resources using this provider.
+  def self.prefetch(packages)
+    Puppet.warning 'The brew package provider is deprecated and will be removed in 4.0.0: ' \
+                   "use provider => homebrew instead (#{packages.keys.sort.join(', ')})"
+    super
   end
 
   def self.instances(justme = false)

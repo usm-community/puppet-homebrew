@@ -1,12 +1,12 @@
 {
   "name": "puppet-homebrew",
-  "version": "3.3.0",
+  "version": "3.4.0",
   "author": "usm",
   "summary": "Homebrew (+brewcask! +taps! +pins! +services! +bundle!) package installer and provider",
   "license": "Apache-2.0",
-  "source": "https://github.com/overag3/puppet-homebrew.git",
-  "project_page": "https://github.com/overag3/puppet-homebrew",
-  "issues_url": "https://github.com/overag3/puppet-homebrew/issues",
+  "source": "https://github.com/usm-community/puppet-homebrew.git",
+  "project_page": "https://github.com/usm-community/puppet-homebrew",
+  "issues_url": "https://github.com/usm-community/puppet-homebrew/issues",
   "dependencies": [
     {
       "name": "puppetlabs/stdlib",

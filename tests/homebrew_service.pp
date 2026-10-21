@@ -1,7 +1,7 @@
 # Install a formula and keep its brew service running.
 package { 'postgresql@14':
   ensure   => present,
-  provider => brew,
+  provider => homebrew,
 }
 
 homebrew_service { 'postgresql@14':

@@ -12,7 +12,6 @@ Puppet::Type.type(:homebrew_tap).provide(:brew) do
   @brewbin = detect_brew_bin
 
   commands :brew => @brewbin
-  commands :stat => '/usr/bin/stat'
 
   # git is used to read/write the tap's `homebrew.forceautoupdate` config. We
   # resolve it ourselves (rather than via `commands`) so a missing git never

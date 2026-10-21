@@ -12,7 +12,6 @@ Puppet::Type.type(:homebrew_service).provide(:brew) do
   @brewbin = detect_brew_bin
 
   commands :brew => @brewbin
-  commands :stat => '/usr/bin/stat'
 
   def run_brew(*args, **opts)
     self.class.run_brew(*args, **opts)

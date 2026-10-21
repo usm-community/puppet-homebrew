@@ -1,16 +1,16 @@
-package { 'git':  # in brew
+package { 'git':  # in homebrew
   ensure   => present,
-  provider => brew,
+  provider => homebrew,
 }
 
-package { 'bazaar':  # in brew
+package { 'bazaar':  # in homebrew
   ensure   => present,
   provider => homebrew,
 }
 
 package { 'clementine':  # in brewcask
   ensure   => present,
-  provider => homebrew,
+  provider => brewcask,
 }
 
 package { 'google-chrome':  # in brewcask
