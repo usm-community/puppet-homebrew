@@ -11,7 +11,7 @@ class homebrew (
   Integer[60] $update_frequency   = 86400,
 ) {
   if $facts['os']['name'] != 'Darwin' {
-    fail('This Module works on Mac OSX only!')
+    fail('This Module works on macOS only!')
   }
 
   if $homebrew::user == 'root' {
