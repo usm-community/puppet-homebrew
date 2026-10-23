@@ -29,7 +29,7 @@ Puppet::Type.type(:package).provide(:brew, :parent => Puppet::Provider::Package)
     home   = passwd.dir
 
     if owner == 0
-      raise Puppet::ExecutionFailure, 'Homebrew does not support installations owned by the "root" user. Please check the permissions of /usr/local/bin/brew'
+      raise Puppet::ExecutionFailure, "Homebrew does not support installations owned by the \"root\" user. Please check the permissions of #{@brewbin}"
     end
 
     # the uid and gid can only be set if running as root
