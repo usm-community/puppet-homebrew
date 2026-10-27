@@ -63,6 +63,9 @@ class homebrew::install {
     }
   }
 
+  # Symlinks skipped: chmod +a follows them and fails on dangling ones.
+  $acl = "group:${homebrew::group}:allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,file_inherit,directory_inherit" # lint:ignore:140chars
+
   $brew_sys_chmod_folders = [
     "${brew_root}/bin",
     "${brew_root}/include",
@@ -80,7 +83,7 @@ class homebrew::install {
     }
 
     exec { "set-${brew_sys_chmod_folder}-directory-inherit":
-      command     => "/bin/chmod -R +a 'group:${homebrew::group}:allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,file_inherit,directory_inherit' ${brew_sys_chmod_folder}", # lint:ignore:140chars
+      command     => ['/usr/bin/find', $brew_sys_chmod_folder, '!', '-type', 'l', '-exec', '/bin/chmod', '+a', $acl, '{}', '+'],
       refreshonly => true,
     }
   }
@@ -119,7 +122,7 @@ class homebrew::install {
       }
 
       exec { "set-${brew_folder}-directory-inherit":
-        command     => "/bin/chmod -R +a 'group:${homebrew::group}:allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,file_inherit,directory_inherit' ${brew_folder}", # lint:ignore:140chars
+        command     => ['/usr/bin/find', $brew_folder, '!', '-type', 'l', '-exec', '/bin/chmod', '+a', $acl, '{}', '+'],
         refreshonly => true,
       }
     }
