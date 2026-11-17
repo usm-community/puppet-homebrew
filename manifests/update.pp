@@ -13,10 +13,13 @@ class homebrew::update {
   # su keeps Puppet's working directory, which brew refuses if its user cannot
   # read it. As in homebrew::install, the login shell only passes the command
   # to bash.
+  # Skipped while the Xcode licence is not accepted: brew refuses to run, and
+  # `|| true` reported that as a successful update on every run.
+  # homebrew::compiler warns about it.
   exec { 'homebrew-update':
     cwd       => '/tmp',
     command   => ['/usr/bin/su', $homebrew::user, '-c', "/bin/bash -c '(${brew} update && /usr/bin/touch ${marker}) || true'"],
-    unless    => "/usr/bin/find ${marker} -mmin -${frequency_minutes} | /usr/bin/grep -q .",
+    unless    => "/bin/sh -c '/usr/bin/find ${marker} -mmin -${frequency_minutes} | /usr/bin/grep -q . || { /usr/bin/xcode-select -p >/dev/null 2>&1 && /usr/bin/xcrun --find clang 2>&1 | /usr/bin/grep -qi license; }'", # lint:ignore:140chars
     logoutput => on_failure,
     timeout   => 300,
   }

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 3.5.0 (2026-11-17)
+- fix: on a new Mac whose Xcode licence is not accepted, brew refuses every command, and nothing said why. `homebrew::compiler` now logs a warning naming the cause and the fix (declare the `xcode` class before homebrew, or `sudo xcodebuild -license accept`). It does not accept the licence itself, and does not fail: homebrew usually runs in an early stage, and a failure there would skip every later stage
+- fix: `homebrew::update` no longer reports a successful update on every run while the Xcode licence is not accepted (`|| true` hid brew's refusal). It is skipped until the licence is accepted
+- fix: a failed brew read reports brew's error instead of nothing. Listings run with stderr kept out of the parse, so a failure carried an empty message (`Could not prefetch package provider 'homebrew': Could not list packages: Execution of '/opt/homebrew/bin/brew list --versions --cask' returned 1:`); the command is run once more with stderr, for the message only
+- fix: `homebrew_tap` with `trust` no longer fails with `Error: Invalid usage: Unknown command: brew trust` on a Homebrew older than 5.1.15, which never clones the tap. Such a brew has no trust check: `trust` is not applied, with a warning, and the tap is cloned. A tap that brew reports without a `trusted` state is trusted
+
 ## 3.4.0 (2026-10-21)
 - deprecated: the `brew` package provider, to be removed in 4.0.0. It handles formulae only and never got the `homebrew` provider's fixes (`ensure => latest` never upgrades). Use `provider => homebrew`; a warning lists the packages still using it, once per run
 - improvement: the brew owner is read in process before each brew command, instead of running `/usr/bin/stat` twice

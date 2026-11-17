@@ -64,7 +64,10 @@ Puppet::Type.type(:homebrew_tap).provide(:brew) do
   end
 
   # tap-info's `trusted` covers official taps and trust.json entries alike.
+  # A brew without tap trust (no `trusted` key) loads every tap: trusted.
   def self.trust_state(tap)
+    return :true unless tap.key?('trusted')
+
     tap['trusted'] ? :true : :false
   end
 
@@ -332,7 +335,26 @@ Puppet::Type.type(:homebrew_tap).provide(:brew) do
       .compact.map { |reference| reference.to_s.strip }.reject(&:empty?).uniq
   end
 
+  # A brew older than 5.1.15 has no `brew trust` ("Unknown command") and no
+  # trust check either: every tap loads, so there is nothing to grant and the
+  # tap is cloned anyway. Warned once per resource.
+  def trust_supported?
+    return true if self.class.brew_supports_command?('trust')
+
+    unless @trust_warned
+      Puppet.warning(
+        "homebrew_tap: #{resource[:name]}: this Homebrew has no `brew trust` command (it appeared in 5.1.15) " \
+        "and does not check tap trust, so trust => #{resource[:trust]} is not applied. " \
+        'Update Homebrew (`brew update` as the brew owner) for it to take effect.'
+      )
+      @trust_warned = true
+    end
+    false
+  end
+
   def apply_trust(value)
+    return unless trust_supported?
+
     if value == :true
       reference = trust_reference
       Puppet.debug("Trusting #{resource[:name]} as #{reference}")
@@ -349,6 +371,8 @@ Puppet::Type.type(:homebrew_tap).provide(:brew) do
   end
 
   def untrust_reference(reference)
+    return unless trust_supported?
+
     Puppet.debug("Untrusting #{resource[:name]} as #{reference}")
     run_brew('untrust', '--tap', reference)
   rescue Puppet::ExecutionFailure => e

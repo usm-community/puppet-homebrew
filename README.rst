@@ -129,6 +129,9 @@ Additional options are available for third-party taps:
   re-applied and the stale entry dropped. ``ensure => absent`` revokes trust as
   well when this resource declares it — ``brew untap`` leaves the store
   untouched, so the entry would otherwise outlive the tap.
+
+  A Homebrew older than 5.1.15 has no ``brew trust`` command and no trust check:
+  ``trust`` is then not applied, with a warning, and the tap is cloned anyway.
 * ``force`` — passes ``--force`` to ``brew tap`` (e.g. to force-clone
   ``homebrew/cask`` even though it is otherwise served from the JSON API) and to
   ``brew untap`` (to allow ``ensure => absent`` even while formulae or casks from
@@ -357,6 +360,23 @@ required:
     class { 'homebrew':
       user => 'kevin',
     }
+
+When ``Xcode.app`` is installed, its licence must be accepted: until it is, brew
+refuses every command (``You have not agreed to the Xcode license``), so taps,
+packages and services fail. This module does not accept it on your behalf; it
+logs a warning and skips ``homebrew::update`` meanwhile. Accept it before
+homebrew runs, e.g. with the ``xcode`` module in the same stage:
+
+.. code-block:: puppet
+
+    class { 'xcode':
+      stage => first,
+    }
+    class { 'homebrew':
+      user  => 'kevin',
+      stage => first,
+    }
+    Class['xcode'] -> Class['homebrew']
 
 Alternatively, you can install the Command Line Tools from a DMG by providing
 both a package name and source URL:

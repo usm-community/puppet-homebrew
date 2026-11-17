@@ -50,8 +50,36 @@ module PuppetX
       # outcome rather than an error (e.g. `brew list --versions <name>`, which
       # exits 1 when the named package simply isn't installed). Execution then
       # returns the output instead of raising Puppet::ExecutionFailure.
+      #
+      # With `combine: false`, a failure would carry stdout only -- usually
+      # empty, the cause being on stderr ("Could not list packages: ...
+      # returned 1:" and nothing else). The command is then run again with
+      # stderr merged, for the error message only: only reads use
+      # `combine: false`, so running one twice is harmless.
       def run_brew(*args, combine: true, failonfail: true)
-        run_owned(command(:brew), *args, combine: combine, failonfail: failonfail)
+        brew = command(:brew)
+        return run_owned(brew, *args, combine: combine, failonfail: failonfail) if combine || !failonfail
+
+        output = run_owned(brew, *args, combine: false, failonfail: false)
+        status = output.respond_to?(:exitstatus) ? output.exitstatus : 0
+        return output if status.nil? || status.zero?
+
+        detail = run_owned(brew, *args, failonfail: false).to_s.strip
+        raise Puppet::ExecutionFailure, "Execution of '#{[brew, *args].join(' ')}' returned #{status}: #{detail}"
+      end
+
+      # Whether this brew has the command `name` (Library/Homebrew/cmd), e.g.
+      # `trust`, which appeared in Homebrew 5.1.15. Read on disk, not cached:
+      # `brew update` may add it between two runs of a daemonized agent. When
+      # the repository cannot be found, brew is left to answer.
+      def brew_supports_command?(name)
+        repository = File.dirname(File.dirname(File.realpath(command(:brew))))
+        cmd_dir    = File.join(repository, 'Library', 'Homebrew', 'cmd')
+        return true unless File.directory?(cmd_dir)
+
+        %w[rb sh].any? { |ext| File.exist?(File.join(cmd_dir, "#{name}.#{ext}")) }
+      rescue SystemCallError
+        true
       end
 
       # Parsed `brew list --json --versions [extra args]`, or nil when brew

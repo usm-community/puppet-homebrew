@@ -40,6 +40,21 @@ class homebrew::compiler {
       unless    => '/bin/test -f /Library/Developer/CommandLineTools/usr/bin/cc',
       timeout   => 0,
       logoutput => on_failure,
+      before    => Exec['homebrew-xcode-license'],
     }
+  }
+
+  # brew refuses every command while the Xcode licence is not accepted, with
+  # the same test as here (brew.sh: xcrun, only when a developer directory is
+  # selected). Taps, packages and services then fail with secondary errors.
+  # This module does not accept the licence on the institution's behalf: it
+  # says so, as a warning. Failing instead would skip every later stage when
+  # homebrew runs in an early one. Checked at run time, not from a fact, so a
+  # licence accepted earlier in the same run (e.g. by the xcode class) counts.
+  exec { 'homebrew-xcode-license':
+    command   => "/bin/echo 'The Xcode licence is not accepted: brew refuses to run until it is. Declare the xcode class before homebrew, or run: sudo xcodebuild -license accept'", # lint:ignore:140chars
+    onlyif    => "/bin/sh -c '/usr/bin/xcode-select -p >/dev/null 2>&1 && /usr/bin/xcrun --find clang 2>&1 | /usr/bin/grep -qi license'", # lint:ignore:140chars
+    logoutput => true,
+    loglevel  => warning,
   }
 }
