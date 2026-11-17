@@ -5,6 +5,9 @@
 - fix: `homebrew::update` no longer reports a successful update on every run while the Xcode licence is not accepted (`|| true` hid brew's refusal). It is skipped until the licence is accepted
 - fix: a failed brew read reports brew's error instead of nothing. Listings run with stderr kept out of the parse, so a failure carried an empty message (`Could not prefetch package provider 'homebrew': Could not list packages: Execution of '/opt/homebrew/bin/brew list --versions --cask' returned 1:`); the command is run once more with stderr, for the message only
 - fix: `homebrew_tap` with `trust` no longer fails with `Error: Invalid usage: Unknown command: brew trust` on a Homebrew older than 5.1.15, which never clones the tap. Such a brew has no trust check: `trust` is not applied, with a warning, and the tap is cloned. A tap that brew reports without a `trusted` state is trusted
+- fix: the group ACLs set on Homebrew's directories (`multiuser`) skip symlinks. `chmod -R +a` followed them and failed on dangling ones, failing the resource
+- fix: the `brew` provider's error for a root-owned installation names the brew binary actually used, instead of always `/usr/local/bin/brew`
+- fix: the error on a non-macOS node spells `macOS`
 
 ## 3.4.0 (2026-10-21)
 - deprecated: the `brew` package provider, to be removed in 4.0.0. It handles formulae only and never got the `homebrew` provider's fixes (`ensure => latest` never upgrades). Use `provider => homebrew`; a warning lists the packages still using it, once per run
